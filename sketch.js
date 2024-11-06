@@ -1,15 +1,22 @@
+const screenWidth = 1280;
+const screenHeight = 819;
+
 let buttonPressed = 0;
-let bubbles = []; //Array to store bubble objects
-let houseImage; // Variable to store the house image
+let bubbles = []; // Array to store bubble objects
 let clamTop, clamBottom; // Variable to store image of clam's top and bottom halves
 let backgroundImage; // Variable to store the background image
 
-let clamWidth = 494 / 2;
-let clamHeight = 270 / 2;
+let clamWidth = 494 / 3;
+let clamHeight = 270 / 3;
+
+let numClams = 4;
+let clamOneOpen = false;
+let clamTwoOpen = false;
+let clamThreeOpen = false;
+let clamFourOpen = false;
 
 function preload() {
   // Load the images before the sketch starts
-  houseImage = loadImage("media/house.png");
   clamTop = loadImage("media/clamTop.png");
   clamBottom = loadImage("media/clamBottom.png");
   backgroundImage = loadImage("media/spongebg.png");
@@ -46,7 +53,7 @@ function setup() {
 
   navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
 
-  createCanvas(windowWidth, windowHeight); // set as full screen width
+  createCanvas(screenWidth, screenHeight); // set as full screen width
   angleMode(DEGREES);
 
   // Generate initial bubbles
@@ -74,79 +81,109 @@ function getMIDIMessage(midiMessage) {
 
   console.log(`${on}, ${channel}, ${value}`);
 
-  /**
-   * Channel can be used to identify what control is being used
-   * 37-43 are the pads, and 70-77 are the knobs
-   * value is the output of the control
-   * Pads give 0 when released, and >0 when pushed
-   * Knobs Give values 0-127
-   * idk what "on" is but
-   *  176 corresponds to a knob
-   *  153 corresponds to a pad being pushed
-   *  137 corresponds to a pad being released
-   */
-
-  // We can use this function to edit variables or do other things
-  // when the user does something with controls
+  switch (channel) {
+    case 40:
+      if (value > 0) {
+        clamOneOpen = true;
+      } else {
+        clamOneOpen = false;
+      }
+      break;
+    case 41:
+      if (value > 0) {
+        clamTwoOpen = true;
+      } else {
+        clamTwoOpen = false;
+      }
+      break;
+    case 42:
+      if (value > 0) {
+        clamThreeOpen = true;
+      } else {
+        clamThreeOpen = false;
+      }
+      break;
+    case 43:
+      if (value > 0) {
+        clamFourOpen = true;
+      } else {
+        clamFourOpen = false;
+      }
+      break;
+    default:
+      console.log("No case was met.");
+      break;
+  }
 }
 
 function draw() {
-  // background("blue");
-  // TODO: Game stuff
+  background(0);
+  tint(255, 205);
+  image(backgroundImage, 0, 0, screenWidth, screenHeight); // Draw background image
 
-  // Draw the background image scaled to window size
-  image(backgroundImage, 0, 0, windowWidth, windowHeight);
-
-  // purely for testing:
-  drawClams();
+  // Draw clams based on open states
+  let clamsOpen = [clamOneOpen, clamTwoOpen, clamThreeOpen, clamFourOpen];
+  noTint();
+  drawClams(clamsOpen);
 
   // Draw and update each bubble
-  for (let i = 0; i < bubbles.length; i++) {
+  for (let i = bubbles.length - 1; i >= 0; i--) {
     bubbles[i].move();
     bubbles[i].display();
 
-    // If the bubble goes off the top of the canvas, reset its position
+    // Remove bubble if clicked
+    if (bubbles[i].isClicked(mouseX, mouseY)) {
+      bubbles.splice(i, 1); // Remove the clicked bubble
+    }
+
+    // Reset bubble position if it moves off the canvas
     if (bubbles[i].y < -bubbles[i].size) {
       bubbles[i].y = height + random(100);
       bubbles[i].x = random(width);
     }
   }
-  // Draw the house image at the bottom right corner
-  let imgWidth = houseImage.width / 2; // Scale image width
-  let imgHeight = houseImage.height / 2; // Scale image height
-  image(
-    houseImage,
-    width - imgWidth - 5,
-    height - imgHeight - 5,
-    imgWidth,
-    imgHeight
-  ); // Position with some padding
 }
 
-function drawClams() {
+function drawClams(clamsOpen) {
   push();
-  translate(0, windowHeight - clamHeight);
-
-  createClam(0, false);
-  translate(clamWidth + 10, 0);
-  createClam(1, false);
-  translate(clamWidth + 400, 0);
-  createClam(0, true);
-  translate(clamWidth + 10, 0);
-  createClam(0, true);
+  translate(0, screenHeight - clamHeight);
+  push();
+  translate(150, -210);
+  rotate(10);
+  createClam(clamsOpen[0], false, 1);
+  pop();
+  push();
+  translate(590, -90);
+  rotate(-10);
+  createClam(clamsOpen[1], true, 0.6);
+  pop();
+  push();
+  translate(650, -40);
+  rotate(5);
+  createClam(clamsOpen[2], false, 0.8);
+  pop();
+  push();
+  translate(930, -20);
+  rotate(5);
+  createClam(clamsOpen[3], true, 0.8);
+  pop();
   pop();
 }
 
-function createClam(x, flipped) {
-  console.log(x);
+function createClam(isOpen, flipped, size) {
   push();
-  if (flipped) scale(-1, 1);
-  image(clamBottom, 0, 0, clamWidth, clamHeight);
-  push();
-  if (true) {
+  scale(size, size);
+  if (isOpen) {
+    translate(0, -20);
     rotate(-15);
   }
-  image(clamTop, 0, 0, clamWidth, clamHeight);
+  if (flipped) scale(-1, 1); // Flip clam horizontally if needed
+  image(clamBottom, 0, 0, clamWidth, clamHeight); // Draw clam bottom
+
+  push();
+  translate(-5, 5);
+  if (isOpen) rotate(-15);
+  image(clamTop, 0, 0, clamWidth, clamHeight); // Draw clam top
   pop();
   pop();
 }
@@ -165,8 +202,16 @@ class Bubble {
   }
 
   display() {
-    fill(255, 255, 255, 150); // Semi-transparent white color for the bubble
+    fill(255, 255, 255, 128); // Semi-transparent white color for the bubble
     noStroke();
-    ellipse(this.x, this.y, this.size, this.size);
+    ellipse(this.x, this.y, this.size, this.size); // Draw the bubble
+  }
+
+  isClicked(px, py) {
+    let d = dist(px, py, this.x, this.y);
+    if (d < this.size / 2 && mouseIsPressed) {
+      return true; // Check if the mouse clicks inside the bubble
+    }
+    return false;
   }
 }
