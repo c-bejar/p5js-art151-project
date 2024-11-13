@@ -323,7 +323,6 @@ function draw() {
 }
 
 function noteStop(note) {
-  note.amp(5);
   note.jump(9.8);
 }
 
