@@ -1,21 +1,27 @@
 const screenWidth = 1280;
 const screenHeight = 819;
 
-let buttonPressed = 0;
-let bubbles = []; // Array to store bubble objects
+// Store bubble and note objects
+let bubbles = [];
 let notes = [];
 
-let clamTop, clamBottom; // Variable to store image of clam's top and bottom halves
-let backgroundImage; // Variable to store the background image
+let numBubbles = 20;
+
+// Clam top and bottom images (for opening mouth)
+let clamTop, clamBottom;
+let backgroundImage;
 
 // sound variables
 let noteC, noteDb, noteE, noteF, noteG, noteAb, noteBb, noteC2;
 let loop1, loop2, loop3, loop4, loop5, loop6, loop7, loop8;
+let bubblePone, bubblePtwo;
+let bubblePops;
 
+// clam's original width/height divided by x to make smaller
 let clamWidth = 494 / 3;
 let clamHeight = 270 / 3;
 
-let numClams = 4;
+// used to keep track of what clams open their mouths
 let clamOneOpen = false;
 let clamTwoOpen = false;
 let clamThreeOpen = false;
@@ -25,11 +31,25 @@ let clamSixOpen = false;
 let clamSevenOpen = false;
 let clamEightOpen = false;
 
+// used to see if user clicked to start playing
+let started = false;
+
+let curtainX = 0; // Initial x-position of the curtains
+let curtainSpeed = 20; // Speed of c
+let curtainisOpen = false; // To track if the curtains are fully open
+
+let customFont;
+
+let noteWidth = 50;
+let noteHeight = 50;
+
 function preload() {
   // Load the images before the sketch starts
   clamTop = loadImage("media/clamTop.png");
   clamBottom = loadImage("media/clamBottom.png");
   backgroundImage = loadImage("media/spongebg.png");
+  customFont = loadFont("media/CarryYouRegular.ttf");
+  noteImage = loadImage("media/musicnotes.png");
 
   //load notes before sketch starts
   noteC = loadSound("sound/notes/C.wav");
@@ -50,34 +70,9 @@ function preload() {
   loop6 = loadSound("sound/backtrack/loop6-105.wav");
   loop7 = loadSound("sound/backtrack/loop7-90.wav");
   loop8 = loadSound("sound/backtrack/loop8-80.wav");
-}
 
-function setup() {
-  WebMidi.enable(function (err) {
-    if (err) {
-      console.log("WebMidi could not be enabled.", err);
-    } else {
-      console.log("WebMidi enabled!");
-
-      // Select LPD8 as input
-      const input = WebMidi.inputs.find((input) => input.name.includes("LPD8"));
-      if (input) {
-        console.log("LPD8 connected!");
-
-        // Listen for pad/button presses
-        input.addListener("noteon", "all", (e) => {
-          buttonPressed = e.note.number - 36; // Pad MIDI note numbers start from 36
-          buttonPressed = constrain(buttonPressed, 0, 7); // Ensure buttonPressed stays within 0-7
-        });
-        // Listen for knob movements
-        input.addListener("controlchange", "all", (e) => {
-          handleKnobInput(e.controller.number, e.value); // Pass knob number and value to handleKnobInput
-        });
-      } else {
-        console.log("LPD8 not found. Please connect and try again.");
-      }
-    }
-  });
+  bubblePone = loadSound("sound/sfx/bubblePopOne.wav");
+  bubblePtwo = loadSound("sound/sfx/bubblePopOne.wav");
 
   if (navigator.requestMIDIAccess) {
     console.log("This browser supports WebMIDI!");
@@ -86,9 +81,22 @@ function setup() {
   }
 
   navigator.requestMIDIAccess().then(onMIDISuccess, onMIDIFailure);
+}
 
+function onMIDISuccess(midiAccess) {
+  for (var input of midiAccess.inputs.values()) {
+    input.onmidimessage = getMIDIMessage;
+  }
+}
+
+function onMIDIFailure() {
+  console.log("Could not access your MIDI devices.");
+}
+
+function setup() {
   createCanvas(screenWidth, screenHeight); // set as full screen width
   angleMode(DEGREES);
+  textAlign(CENTER);
 
   // Generate initial bubbles
   for (let i = 0; i < 20; i++) {
@@ -96,6 +104,8 @@ function setup() {
       new Bubble(random(width), height + random(100), random(20, 50))
     );
   }
+
+  bubblePops = [bubblePone, bubblePtwo];
 
   loop1.loop();
   loop1.amp(0);
@@ -113,16 +123,6 @@ function setup() {
   loop7.amp(0);
   loop8.loop();
   loop8.amp(0);
-}
-
-function onMIDISuccess(midiAccess) {
-  for (var input of midiAccess.inputs.values()) {
-    input.onmidimessage = getMIDIMessage;
-  }
-}
-
-function onMIDIFailure() {
-  console.log("Could not access your MIDI devices.");
 }
 
 function getMIDIMessage(midiMessage) {
@@ -235,47 +235,93 @@ function getMIDIMessage(midiMessage) {
         clamEightOpen = false;
       }
       break;
+    case 70:
+      value = map(value, 0, 127, 0, 1);
+      loop1.amp(value);
+      break;
+    case 71:
+      value = map(value, 0, 127, 0, 1);
+      loop2.amp(value);
+      break;
+    case 72:
+      value = map(value, 0, 127, 0, 1);
+      loop3.amp(value);
+      break;
+    case 73:
+      value = map(value, 0, 127, 0, 1);
+      loop4.amp(value);
+      break;
+    case 74:
+      value = map(value, 0, 127, 0, 1);
+      loop5.amp(value);
+      break;
+    case 75:
+      value = map(value, 0, 127, 0, 1);
+      loop6.amp(value);
+      break;
+    case 76:
+      value = map(value, 0, 127, 0, 1);
+      loop7.amp(value);
+      break;
+    case 77:
+      value = map(value, 0, 127, 0, 1);
+      loop8.amp(value);
+      break;
     default:
       console.log("No case was met.");
       break;
   }
 }
 
-function handleKnobInput(knob, value) {
-  console.log(`Knob: ${knob}, Value: ${value}`); // Debugging line to track knob inputs
+let floatOffset = 0; // Used to track the floating animation
 
-  switch (knob) {
-    case 70:
-      loop1.amp(value);
-      break;
-    case 71:
-      loop2.amp(value);
-      break;
-    case 72:
-      loop3.amp(value);
-      break;
-    case 73:
-      loop4.amp(value);
-      break;
-    case 74:
-      loop5.amp(value);
-      break;
-    case 75:
-      loop6.amp(value);
-      break;
-    case 76:
-      loop7.amp(value);
-      break;
-    case 77:
-      loop8.amp(value);
-      break;
-    default:
-      console.log("Unmapped knob:", knob);
-      break;
+function draw() {
+  if (started)
+    if (!curtainisOpen) {
+      drawCurtainEffect();
+    } else {
+      gameLoop();
+    }
+  else {
+    background(0);
+    fill("blue");
+    textSize(80);
+    textFont(customFont);
+    text("Under the Sea Live Show", width / 2, height / 2);
+
+    // Calculate floating effect
+    let floatY = height / 2 + sin(floatOffset) * 20;
+    text("Under the Sea Live Show", width / 2, floatY);
+
+    // Update offset for animation
+    floatOffset += 2;
   }
 }
 
-function draw() {
+function drawCurtainEffect() {
+  background(0);
+
+  // Left Curtain
+  fill(50);
+  rect(0, 0, curtainX, height);
+
+  // Right Curtain
+  rect(width - curtainX, 0, curtainX, height);
+
+  // Update curtain position
+  curtainX += curtainSpeed;
+
+  // Check if curtains are fully open
+  if (curtainX >= width / 2) {
+    curtainisOpen = true;
+  }
+}
+
+function mouseClicked() {
+  started = true;
+}
+
+function gameLoop() {
   background(0);
   tint(255, 205);
   image(backgroundImage, 0, 0, screenWidth, screenHeight); // Draw background image
@@ -284,29 +330,31 @@ function draw() {
   drawClams();
 
   // Create musical notes when clams are open
-  if (clamOneOpen) notes.push(new Note(150, screenHeight - 210, 24));
-  if (clamTwoOpen) notes.push(new Note(590, screenHeight - 90, 24));
-  if (clamThreeOpen) notes.push(new Note(650, screenHeight - 40, 24));
-  if (clamFourOpen) notes.push(new Note(930, screenHeight - 20, 24));
-  if (clamFiveOpen) notes.push(new Note(280, screenHeight - 400, 24));
-  if (clamSixOpen) notes.push(new Note(650, screenHeight - 80, 24));
-  if (clamSevenOpen) notes.push(new Note(850, screenHeight - 200, 24));
-  if (clamEightOpen) notes.push(new Note(1250, screenHeight - 575, 24));
+  if (clamOneOpen) notes.push(new Note(250, screenHeight - 270, 48));
+  if (clamTwoOpen) notes.push(new Note(525, screenHeight - 155, 48));
+  if (clamThreeOpen) notes.push(new Note(725, screenHeight - 100, 48));
+  if (clamFourOpen) notes.push(new Note(850, screenHeight - 100, 48));
+  if (clamFiveOpen) notes.push(new Note(180, screenHeight - 460, 48));
+  if (clamSixOpen) notes.push(new Note(680, screenHeight - 170, 48));
+  if (clamSevenOpen) notes.push(new Note(890, screenHeight - 280, 48));
+  if (clamEightOpen) notes.push(new Note(1190, screenHeight - 695, 48));
 
   // Draw and update each bubble
   for (let i = bubbles.length - 1; i >= 0; i--) {
     bubbles[i].move();
     bubbles[i].display();
 
-    // Remove bubble if clicked
-    if (bubbles[i].isClicked(mouseX, mouseY)) {
-      bubbles.splice(i, 1); // Remove the clicked bubble
-    }
-
     // Reset bubble position if it moves off the canvas
     if (bubbles[i].y < -bubbles[i].size) {
       bubbles[i].y = height + random(100);
       bubbles[i].x = random(width);
+    }
+
+    // Remove bubble if clicked
+    if (bubbles[i].isClicked(mouseX, mouseY)) {
+      bubblePops[Math.floor(random(2))].play();
+      numBubbles--;
+      bubbles.splice(i, 1); // Remove the clicked bubble
     }
   }
 
@@ -320,6 +368,14 @@ function draw() {
       notes.splice(i, 1);
     }
   }
+
+  if (numBubbles < 20) {
+    bubbles.push(
+      new Bubble(random(width), height + random(100), random(20, 50))
+    );
+    numBubbles++;
+  }
+  // drawNote();
 }
 
 function noteStop(note) {
@@ -397,18 +453,21 @@ class Note {
     this.x = x;
     this.y = y;
     this.size = size;
-    this.speed = random(1, 3); // Speed of the note
+    this.speed = random(2, 5); // Speed of the note
 
     // Generate a random color for each note
     this.color = color(random(255), random(255), random(255));
   }
 
   move() {
-    this.y -= this.speed; // Msove the note upward
+    this.y -= this.speed; // Move the note upward
+    this.x += sin(frameCount / 10) * 2; // Sway horizontally
   }
 
   display() {
     fill(this.color); // Set the note's color
+    noStroke();
+    textFont("Courier New");
     textSize(this.size);
     text("♪", this.x, this.y); // Display musical note symbol
   }
@@ -440,4 +499,16 @@ class Bubble {
     }
     return false;
   }
+}
+
+function drawNote() {
+  let noteWidth = 100;
+  let noteHeight = 100;
+
+  image(noteImage, noteX, noteY, noteWidth, noteHeight);
+}
+
+function UpdateNoteSize() {
+  noteWidth += 1;
+  noteHeight += 1;
 }
